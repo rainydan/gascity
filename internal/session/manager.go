@@ -71,6 +71,11 @@ type Manager struct {
 	sp    runtime.Provider
 }
 
+type acpRouteRegistrar interface {
+	RouteACP(name string)
+	Unroute(name string)
+}
+
 // NewManager creates a Manager backed by the given bead store and session provider.
 func NewManager(store beads.Store, sp runtime.Provider) *Manager {
 	return &Manager{store: store, sp: sp}
@@ -129,6 +134,14 @@ func (m *Manager) Create(ctx context.Context, template, title, command, workDir,
 		return Info{}, fmt.Errorf("storing session name: %w", err)
 	}
 
+	var unroute func()
+	if provider == "acp" {
+		if router, ok := m.sp.(acpRouteRegistrar); ok {
+			router.RouteACP(sessName)
+			unroute = func() { router.Unroute(sessName) }
+		}
+	}
+
 	// If the provider supports Generate & Pass, inject --session-id into command.
 	startCommand := command
 	if resume.SessionIDFlag != "" && sessionKey != "" {
@@ -144,6 +157,9 @@ func (m *Manager) Create(ctx context.Context, template, title, command, workDir,
 	// Start the runtime session.
 	if err := m.sp.Start(ctx, sessName, cfg); err != nil {
 		// Clean up the bead on start failure.
+		if unroute != nil {
+			unroute()
+		}
 		_ = m.store.Close(b.ID)
 		return Info{}, fmt.Errorf("starting session: %w", err)
 	}
