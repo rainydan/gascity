@@ -14,7 +14,6 @@ import (
 type sessionResponse struct {
 	ID          string `json:"id"`
 	Template    string `json:"template"`
-	WorkDir     string `json:"work_dir,omitempty"`
 	State       string `json:"state"`
 	Reason      string `json:"reason,omitempty"`
 	Title       string `json:"title"`
@@ -29,7 +28,6 @@ func sessionToResponse(info session.Info) sessionResponse {
 	r := sessionResponse{
 		ID:          info.ID,
 		Template:    info.Template,
-		WorkDir:     info.WorkDir,
 		State:       string(info.State),
 		Title:       info.Title,
 		Provider:    info.Provider,
@@ -124,7 +122,7 @@ func (s *Server) handleSessionGet(w http.ResponseWriter, r *http.Request) {
 	}
 	info, err := mgr.Get(id)
 	if err != nil {
-		writeStoreError(w, err)
+		writeSessionManagerError(w, err)
 		return
 	}
 	b, _ := store.Get(id)
@@ -146,7 +144,7 @@ func (s *Server) handleSessionSuspend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := mgr.Suspend(id); err != nil {
-		writeStoreError(w, err)
+		writeSessionManagerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -167,7 +165,7 @@ func (s *Server) handleSessionClose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := mgr.Close(id); err != nil {
-		writeStoreError(w, err)
+		writeSessionManagerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -264,7 +262,7 @@ func (s *Server) handleSessionRename(w http.ResponseWriter, r *http.Request) {
 	mgr := session.NewManager(store, sp)
 	info, err := mgr.Get(id)
 	if err != nil {
-		writeStoreError(w, err)
+		writeSessionManagerError(w, err)
 		return
 	}
 	updated, _ := store.Get(id)
@@ -326,7 +324,7 @@ func (s *Server) handleSessionPatch(w http.ResponseWriter, r *http.Request) {
 	mgr := session.NewManager(store, sp)
 	info, err := mgr.Get(id)
 	if err != nil {
-		writeStoreError(w, err)
+		writeSessionManagerError(w, err)
 		return
 	}
 	updated, _ := store.Get(id)
