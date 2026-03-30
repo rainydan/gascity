@@ -204,6 +204,11 @@ func findCanonicalNamedSessionBead(sessionBeads *sessionBeadSnapshot, identity s
 		if isNamedSessionBead(b) && namedSessionIdentity(b) == identity {
 			return b, true
 		}
+		// Legacy beads created before configured_named_session metadata
+		// existed use alias matching as the canonical signal.
+		if !isNamedSessionBead(b) && strings.TrimSpace(b.Metadata["alias"]) == identity {
+			return b, true
+		}
 	}
 	return beads.Bead{}, false
 }

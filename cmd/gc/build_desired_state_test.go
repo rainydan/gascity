@@ -366,3 +366,53 @@ func TestBuildDesiredState_ManualPoolSessionInSuspendedRigStaysStopped(t *testin
 		}
 	}
 }
+
+func TestBuildDesiredState_NamedSessionWithLegacyBeadStaysDesired(t *testing.T) {
+	// A [[named_session]] with an existing open bead that uses the legacy
+	// alias-based identity (no configured_named_session metadata) should
+	// remain in desired state. This prevents the reconciler from closing
+	// beads created before the configured_named_* metadata keys existed.
+	cityPath := t.TempDir()
+	store := beads.NewMemStore()
+	if _, err := store.Create(beads.Bead{
+		Title:  "mayor",
+		Type:   sessionBeadType,
+		Labels: []string{sessionBeadLabel, "agent:mayor"},
+		Metadata: map[string]string{
+			"template":     "mayor",
+			"session_name": "mayor",
+			"alias":        "mayor",
+			"state":        "stopped",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.City{
+		Agents: []config.Agent{
+			{Name: "mayor", StartCommand: "echo"},
+		},
+		NamedSessions: []config.NamedSession{
+			{Template: "mayor"},
+		},
+	}
+
+	desired := buildDesiredState("test-city", cityPath, time.Now().UTC(), cfg, runtime.NewFake(), store, io.Discard)
+	found := false
+	for _, tp := range desired {
+		if tp.TemplateName == "mayor" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected mayor in desired state (legacy bead with alias), got keys: %v", desiredKeys(desired))
+	}
+}
+
+func desiredKeys(d map[string]TemplateParams) []string {
+	keys := make([]string, 0, len(d))
+	for k := range d {
+		keys = append(keys, k)
+	}
+	return keys
+}
