@@ -17,12 +17,8 @@ func TestBuildDesiredState_SingletonTemplateDoesNotRealizeDependencyPoolFloorWit
 	cfg := &config.City{
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
 				Name:      "api",
@@ -48,20 +44,12 @@ func TestBuildDesiredState_DoesNotRealizeDependencyFloorForZeroScaledDependentPo
 	cfg := &config.City{
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
-				Name: "api",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "api",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 				DependsOn: []string{"db"},
 			},
 		},
@@ -80,12 +68,8 @@ func TestBuildDesiredState_DoesNotRealizeDependencyFloorForSuspendedDependent(t 
 	cfg := &config.City{
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
 				Name:      "api",
@@ -108,20 +92,12 @@ func TestBuildDesiredState_SingletonTemplatesDoNotRealizeTransitiveDependencyPoo
 	cfg := &config.City{
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
-				Name: "api",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "api",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 				DependsOn: []string{"db"},
 			},
 			{
@@ -168,12 +144,8 @@ func TestBuildDesiredState_DiscoveredSessionRootGetsDependencyPoolFloor(t *testi
 	cfg := &config.City{
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
 				Name:         "helper",
@@ -218,22 +190,14 @@ func TestBuildDesiredState_ManualZeroScaledPoolSessionStaysDesiredAndKeepsDepend
 	cfg := &config.City{
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
-				Name:         "api",
-				DependsOn:    []string{"db"},
-				StartCommand: "echo",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "api",
+				DependsOn:         []string{"db"},
+				StartCommand:      "echo",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 		},
 	}
@@ -272,21 +236,13 @@ func TestBuildDesiredState_ZeroScaledPoolSessionKeepsDependencyFloorWhileDrainin
 	cfg := &config.City{
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
-				Name:      "api",
-				DependsOn: []string{"db"},
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "api",
+				DependsOn:         []string{"db"},
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 		},
 	}
@@ -334,24 +290,16 @@ func TestBuildDesiredState_ManualPoolSessionInSuspendedRigStaysStopped(t *testin
 		}},
 		Agents: []config.Agent{
 			{
-				Name: "db",
-				Dir:  "payments",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "db",
+				Dir:               "payments",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 			{
-				Name:         "api",
-				Dir:          "payments",
-				DependsOn:    []string{"payments/db"},
-				StartCommand: "echo",
-				Pool: &config.PoolConfig{
-					Min:   0,
-					Max:   3,
-					Check: "printf 0",
-				},
+				Name:              "api",
+				Dir:               "payments",
+				DependsOn:         []string{"payments/db"},
+				StartCommand:      "echo",
+				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(3), ScaleCheck: "printf 0",
 			},
 		},
 	}

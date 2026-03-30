@@ -73,7 +73,7 @@ func buildDesiredStateWithSessionBeads(
 
 	type poolEvalWork struct {
 		agentIdx int
-		pool     config.PoolConfig
+		sp       scaleParams
 		poolDir  string
 	}
 
@@ -88,9 +88,9 @@ func buildDesiredStateWithSessionBeads(
 			continue
 		}
 
-		pool := cfg.Agents[i].EffectivePool()
+		sp := scaleParamsFor(&cfg.Agents[i])
 
-		if pool.Max == 0 {
+		if sp.Max == 0 {
 			continue
 		}
 
@@ -100,15 +100,15 @@ func buildDesiredStateWithSessionBeads(
 		}
 		eligibleTemplates[cfg.Agents[i].QualifiedName()] = true
 
-		if pool.Max == 1 && !cfg.Agents[i].IsPool() {
-			// Singleton agents are templates only. A session exists only after
-			// an explicit create or other on-demand session minting path.
+		isExplicitMultiSession := cfg.Agents[i].MaxActiveSessions != nil && *cfg.Agents[i].MaxActiveSessions != 1
+		if sp.Max == 1 && !isExplicitMultiSession {
+			// Fixed agent: template produces exactly one session.
 			continue
 		}
 
 		// Pool agent: collect for parallel scale_check.
 		poolDir := agentCommandDir(cityPath, &cfg.Agents[i], cfg.Rigs)
-		pendingPools = append(pendingPools, poolEvalWork{agentIdx: i, pool: pool, poolDir: poolDir})
+		pendingPools = append(pendingPools, poolEvalWork{agentIdx: i, sp: sp, poolDir: poolDir})
 	}
 
 	for i := range cfg.NamedSessions {
@@ -132,11 +132,11 @@ func buildDesiredStateWithSessionBeads(
 	var wg sync.WaitGroup
 	for j, pw := range pendingPools {
 		wg.Add(1)
-		go func(idx int, name string, pool config.PoolConfig, dir string) {
+		go func(idx int, name string, sp scaleParams, dir string) {
 			defer wg.Done()
-			d, err := evaluatePool(name, pool, dir, shellScaleCheck)
+			d, err := evaluatePool(name, sp, dir, shellScaleCheck)
 			evalResults[idx] = poolEvalResult{desired: d, err: err}
-		}(j, cfg.Agents[pw.agentIdx].Name, pw.pool, pw.poolDir)
+		}(j, cfg.Agents[pw.agentIdx].Name, pw.sp, pw.poolDir)
 	}
 	wg.Wait()
 
@@ -144,7 +144,7 @@ func buildDesiredStateWithSessionBeads(
 	for j, pw := range pendingPools {
 		pr := evalResults[j]
 		if pr.err != nil {
-			fmt.Fprintf(stderr, "buildDesiredState: %v (using min=%d)\n", pr.err, pw.pool.Min) //nolint:errcheck
+			fmt.Fprintf(stderr, "buildDesiredState: %v (using min=%d)\n", pr.err, pw.sp.Min) //nolint:errcheck
 		}
 		poolDesiredCounts[j] = pr.desired
 		if pr.desired > 0 {
@@ -189,8 +189,8 @@ func buildDesiredStateWithSessionBeads(
 			// If multi-instance (max > 1 or unlimited), use themed name
 			// (from namepool) or {name}-{N} suffix.
 			name := cfg.Agents[pw.agentIdx].Name
-			if pw.pool.IsMultiInstance() {
-				name = poolInstanceName(cfg.Agents[pw.agentIdx].Name, slot, pw.pool)
+			if pw.sp.Max > 1 || pw.sp.Max < 0 {
+				name = poolInstanceName(cfg.Agents[pw.agentIdx].Name, slot, &cfg.Agents[pw.agentIdx])
 			}
 			qualifiedInstance := name
 			if cfg.Agents[pw.agentIdx].Dir != "" {
@@ -386,7 +386,7 @@ func discoverSessionBeads(
 		// slots, but keep manual session roots discoverable even when the pool
 		// currently wants 0 instances. Manual roots come from `gc session new`
 		// and intentionally bypass scale checks.
-		if cfgAgent.Pool != nil {
+		if isMultiSessionCfgAgent(cfgAgent) {
 			templateHasDesired := false
 			for _, existing := range desired {
 				if existing.TemplateName == template {
@@ -439,12 +439,22 @@ func installAgentSideEffects(bp *agentBuildParams, cfgAgent *config.Agent, tp Te
 	}
 }
 
+// isMultiSessionCfgAgent reports whether a config agent supports multiple
+// concurrent sessions. This replaces the removed IsPool() / Pool != nil checks.
+func isMultiSessionCfgAgent(a *config.Agent) bool {
+	if a == nil {
+		return false
+	}
+	max := a.EffectiveMaxActiveSessions()
+	return max == nil || *max != 1
+}
+
 // poolInstanceName returns the name for pool slot N.
-// If the pool has namepool names and the slot is in range, uses the themed
+// If the agent has namepool names and the slot is in range, uses the themed
 // name. Otherwise falls back to "{base}-{slot}".
-func poolInstanceName(base string, slot int, pool config.PoolConfig) string {
-	if slot >= 1 && slot <= len(pool.NamepoolNames) {
-		return pool.NamepoolNames[slot-1]
+func poolInstanceName(base string, slot int, a *config.Agent) string {
+	if a != nil && slot >= 1 && slot <= len(a.NamepoolNames) {
+		return a.NamepoolNames[slot-1]
 	}
 	return fmt.Sprintf("%s-%d", base, slot)
 }

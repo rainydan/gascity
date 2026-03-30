@@ -177,7 +177,7 @@ func TestDecorateDynamicFragmentRecipePreservesPoolFallbackAndScopeMetadata(t *t
 	cfg := &config.City{
 		Workspace: config.Workspace{Name: "test-city"},
 		Agents: []config.Agent{
-			{Name: "reviewer", Dir: "frontend", Pool: &config.PoolConfig{Min: 1, Max: 3}},
+			{Name: "reviewer", Dir: "frontend", MinActiveSessions: intPtr(1), MaxActiveSessions: intPtr(3)},
 		},
 	}
 	config.InjectImplicitAgents(cfg)
@@ -411,6 +411,82 @@ func TestRunWorkflowServeReturnsQueryError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "querying control work") {
 		t.Fatalf("runWorkflowServe error = %q, want querying control work context", err)
+	}
+}
+
+func TestRunWorkflowServeFollowUsesSweepFallback(t *testing.T) {
+	eventsDir := t.TempDir()
+	ep := newTestProvider(t, eventsDir)
+
+	prevList := workflowServeList
+	prevControl := workflowServeControl
+	prevProvider := workflowServeOpenEventsProvider
+	prevSweep := workflowServeWakeSweepInterval
+	workflowServeWakeSweepInterval = time.Millisecond
+	t.Cleanup(func() {
+		workflowServeList = prevList
+		workflowServeControl = prevControl
+		workflowServeOpenEventsProvider = prevProvider
+		workflowServeWakeSweepInterval = prevSweep
+	})
+
+	workflowServeOpenEventsProvider = func(io.Writer) (events.Provider, error) {
+		return ep, nil
+	}
+
+	var processed []string
+	calls := 0
+	workflowServeList = func(_, _ string) ([]hookBead, error) {
+		calls++
+		switch calls {
+		case 1:
+			return nil, nil
+		case 2:
+			return []hookBead{{ID: "gc-ready", Metadata: map[string]string{"gc.kind": "scope-check"}}}, nil
+		default:
+			return nil, nil
+		}
+	}
+	workflowServeControl = func(beadID string, _ io.Writer, _ io.Writer) error {
+		processed = append(processed, beadID)
+		return os.ErrDeadlineExceeded
+	}
+
+	wfcAgent := config.Agent{Name: "workflow-control", MinActiveSessions: intPtr(1), MaxActiveSessions: intPtr(1)}
+	err := runWorkflowServeFollow(
+		wfcAgent,
+		t.TempDir(),
+		io.Discard,
+	)
+	if err == nil || !strings.Contains(err.Error(), os.ErrDeadlineExceeded.Error()) {
+		t.Fatalf("runWorkflowServeFollow error = %v, want wrapped %v", err, os.ErrDeadlineExceeded)
+	}
+	if !slices.Equal(processed, []string{"gc-ready"}) {
+		t.Fatalf("processed beads = %#v, want sweep fallback to process gc-ready", processed)
+	}
+}
+
+func TestWorkflowEventRelevantAcceptsBeadLifecycleEvents(t *testing.T) {
+	for _, evt := range []events.Event{
+		{Type: events.BeadCreated},
+		{Type: events.BeadClosed},
+		{Type: events.BeadUpdated},
+	} {
+		if !workflowEventRelevant(evt) {
+			t.Fatalf("workflowEventRelevant(%q) = false, want true", evt.Type)
+		}
+	}
+}
+
+func TestWorkflowEventRelevantRejectsNonBeadEvents(t *testing.T) {
+	for _, evt := range []events.Event{
+		{Type: events.SessionUpdated},
+		{Type: events.ControllerStarted},
+		{Type: events.CitySuspended},
+	} {
+		if workflowEventRelevant(evt) {
+			t.Fatalf("workflowEventRelevant(%q) = true, want false", evt.Type)
+		}
 	}
 }
 
